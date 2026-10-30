@@ -1,0 +1,4 @@
+# Only the endpoint is public; config and samples are never served.
+<FilesMatch "^(config|config\.sample)\.php$">
+  Require all denied
+</FilesMatch>

@@ -1,0 +1,5 @@
+# Real credentials never go to GitHub
+api/config.php
+neura-config.php
+.DS_Store
+Thumbs.db
