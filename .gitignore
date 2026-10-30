@@ -3,3 +3,5 @@ api/config.php
 neura-config.php
 .DS_Store
 Thumbs.db
+dist/
+node_modules/

@@ -1,0 +1,14 @@
+{
+  "name": "neura-academy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Neura Academy landing page: static site with a PHP enrollment endpoint",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/serve.mjs"
+  }
+}

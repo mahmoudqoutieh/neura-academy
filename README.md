@@ -32,6 +32,16 @@
 5. اختياري: فعّل **Auto Deployment** وأضف رابط الـ Webhook في GitHub
    (Settings > Webhooks) لينشر الموقع تلقائياً بعد كل تعديل.
 
+### إذا استخدمت خيار «Node.js» أو «Import from GitHub» بدلاً من Advanced > Git
+المستودع فيه `package.json`، فهذا الخيار يعمل أيضاً. استخدم هذه الإعدادات:
+- Build command: `npm run build`
+- Output directory: `dist`
+- Start command (إن طُلب): `npm start`
+- Node version: 18 أو أحدث
+
+مهم: نموذج التسجيل يحتاج PHP. على خيار Node.js تعمل الصفحة كاملة، لكن طلبات التسجيل
+لن تُحفظ. لذلك الطريقة الموصى بها هي **Advanced > Git** في الخطوة 1.
+
 ### 2. قاعدة البيانات
 1. hPanel > **Databases > MySQL Databases**: أنشئ قاعدة بيانات ومستخدماً واحفظ كلمة المرور.
 2. افتح **phpMyAdmin**، اختر القاعدة، ثم تبويب **SQL**، والصق محتوى `database/schema.sql` واضغط **Go**.
