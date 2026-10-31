@@ -65,7 +65,7 @@
         s.end = s.start + r.height;
       });
       total = Math.max(segs[segs.length - 1].end, vh);
-      dirty = true;
+      if (typeof wake === "function") wake();
     }
 
     function prime(video) {
@@ -103,7 +103,7 @@
             if (s.video !== video) return;
             s.ready = true;
             s.loading = false;
-            dirty = true;
+            wake();
           }, { once: true });
           video.addEventListener("loadeddata", function () {
             if (userReady && s.video === video) prime(video);
@@ -159,30 +159,48 @@
       root.style.setProperty("--ss-progress", String(clamp(y / total)));
     }
 
+    // Returns true while any clip is still easing toward its scroll target.
     function updateVideos() {
       var eps = isMobile() ? 0.02 : 0.008;
+      var busy = false;
       segs.forEach(function (s) {
         var v = s.video;
-        if (!v || !s.ready || v.seeking) return;
-        if (!s.visible && Math.abs(s.current - s.target) < 0.002) return;
+        if (s.loading) busy = true;
+        if (!v || !s.ready) return;
+        if (v.seeking) { busy = true; return; }
+        if (Math.abs(s.current - s.target) < 0.0005) return;
+        busy = true;
         s.current += (s.target - s.current) * 0.2;
         var t = clamp(s.current, 0, 0.999) * (v.duration || 1);
         if (Math.abs(v.currentTime - t) > eps) {
           try { v.currentTime = t; } catch (e) { /* keep last painted frame */ }
         }
       });
+      return busy;
     }
 
+    var running = false;
     function tick() {
       if (dirty) {
         dirty = false;
         readScroll();
       }
-      updateVideos();
-      window.requestAnimationFrame(tick);
+      var busy = updateVideos();
+      if (dirty || busy) {
+        window.requestAnimationFrame(tick);
+      } else {
+        running = false;
+      }
+    }
+    function wake() {
+      dirty = true;
+      if (!running) {
+        running = true;
+        window.requestAnimationFrame(tick);
+      }
     }
 
-    window.addEventListener("scroll", function () { dirty = true; }, { passive: true });
+    window.addEventListener("scroll", wake, { passive: true });
     window.addEventListener("resize", function () {
       // Mobile URL-bar show/hide only changes height: skip the relayout.
       if (coarsePointer && window.innerWidth === layoutWidth) return;
@@ -207,7 +225,7 @@
     });
 
     layout();
-    window.requestAnimationFrame(tick);
+    wake();
   }
 
   /* ---------- Pointer effects (desktop with a mouse only) ---------- */
@@ -352,10 +370,89 @@
     });
   }
 
+
+  /* ---------- Phone layout: hero loop, story dots, sticky enroll bar, menu ---------- */
+  function initPhone() {
+    var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var saveData = navigator.connection && navigator.connection.saveData;
+    var hasIO = "IntersectionObserver" in window;
+
+    // Hero loop: starts only after the page has loaded, pauses when off screen.
+    var video = document.querySelector(".m-hero__video");
+    if (video && !reduce && !saveData) {
+      var start = function () {
+        video.src = video.getAttribute("data-src");
+        var p = video.play();
+        if (p && p.catch) p.catch(function () {});
+        if (hasIO) {
+          new IntersectionObserver(function (entries) {
+            var e = entries[0];
+            if (e.isIntersecting) { var q = video.play(); if (q && q.catch) q.catch(function () {}); }
+            else video.pause();
+          }).observe(video);
+        }
+      };
+      var later = function () {
+        if ("requestIdleCallback" in window) window.requestIdleCallback(start, { timeout: 1500 });
+        else window.setTimeout(start, 300);
+      };
+      if (document.readyState === "complete") later();
+      else window.addEventListener("load", later, { once: true });
+    }
+
+    // Story dots follow the swipe position.
+    var track = document.querySelector(".m-story__track");
+    var dots = document.querySelectorAll(".m-story__dots span");
+    if (track && dots.length) {
+      var pending = false;
+      track.addEventListener("scroll", function () {
+        if (pending) return;
+        pending = true;
+        window.requestAnimationFrame(function () {
+          pending = false;
+          var card = track.firstElementChild;
+          var step = card ? card.getBoundingClientRect().width + 14 : 1;
+          var i = Math.round(Math.abs(track.scrollLeft) / step);
+          Array.prototype.forEach.call(dots, function (d, n) { d.classList.toggle("is-active", n === i); });
+        });
+      }, { passive: true });
+    }
+
+    // Sticky enroll bar: visible after the hero, hidden while the form is on screen.
+    var bar = document.querySelector(".m-cta-bar");
+    var hero = document.querySelector(".m-hero");
+    var form = document.getElementById("enroll");
+    if (bar && hero && form && hasIO) {
+      var heroVisible = true, formVisible = false;
+      var sync = function () { bar.classList.toggle("is-visible", !heroVisible && !formVisible); };
+      new IntersectionObserver(function (e) { heroVisible = e[0].isIntersecting; sync(); }).observe(hero);
+      new IntersectionObserver(function (e) { formVisible = e[0].isIntersecting; sync(); }, { rootMargin: "0px 0px -20% 0px" }).observe(form);
+    }
+
+    // Menu closes after choosing a section.
+    var menu = document.querySelector(".m-menu");
+    if (menu) {
+      menu.addEventListener("click", function (e) {
+        if (e.target.closest && e.target.closest("a")) menu.removeAttribute("open");
+      });
+    }
+  }
+
   function init() {
     var year = document.querySelector("[data-year]");
     if (year) year.textContent = String(new Date().getFullYear());
-    initScrollScrub();
+    var desktop = window.matchMedia("(min-width: 861px)");
+    if (desktop.matches) {
+      initScrollScrub();
+    } else {
+      var onChange = function (e) {
+        if (!e.matches) return;
+        initScrollScrub();
+        if (desktop.removeEventListener) desktop.removeEventListener("change", onChange);
+      };
+      if (desktop.addEventListener) desktop.addEventListener("change", onChange);
+      initPhone();
+    }
     initPointerFx();
     initEnroll();
   }

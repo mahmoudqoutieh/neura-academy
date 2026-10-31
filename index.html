@@ -19,10 +19,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;500;600&family=IBM+Plex+Sans+Arabic:wght@300;400&display=swap">
-  <link rel="preload" as="image" href="/assets/video/scene-01-mobile-poster.webp" media="(max-width: 860px)">
+  <link rel="preload" as="image" href="/assets/video/m-hero-poster.webp" media="(max-width: 860px)">
   <link rel="preload" as="image" href="/assets/video/scene-01-poster.webp" media="(min-width: 861px)">
-  <link rel="stylesheet" href="/assets/css/style.css?v=1">
-  <script defer src="/assets/js/main.js?v=1"></script>
+  <link rel="stylesheet" href="/assets/css/style.css?v=2">
+  <script defer src="/assets/js/main.js?v=2"></script>
 </head>
 <body>
 <div class="neura">
@@ -40,9 +40,66 @@
       <a href="#faq">الأسئلة</a>
     </nav>
     <a class="n-header__cta" href="#enroll">سجّل الآن</a>
+    <details class="m-menu">
+      <summary aria-label="القائمة"><span></span><span></span></summary>
+      <nav aria-label="القائمة" class="m-menu__panel">
+        <a href="#tracks">المسارات</a>
+        <a href="#method">طريقة التعلم</a>
+        <a href="#plans">الخطط</a>
+        <a href="#faq">الأسئلة</a>
+        <a class="m-menu__cta" href="#enroll">سجّل الآن</a>
+      </nav>
+    </details>
   </header>
 
   <main>
+    <!-- Phone layout: a light hero loop and swipeable story cards (no scroll scrubbing) -->
+    <section class="m-hero" id="m-start">
+      <div class="m-hero__media">
+        <video aria-hidden="true" class="m-hero__video" data-src="/assets/video/m-hero.mp4" loop muted playsinline poster="/assets/video/m-hero-poster.webp" preload="none"></video>
+      </div>
+      <div class="m-hero__copy">
+        <p class="m-hero__kicker">أكاديمية نيورا للذكاء الاصطناعي</p>
+        <h1 class="m-hero__title">تعلّم الذكاء الاصطناعي من الصفر إلى الاحتراف</h1>
+        <p class="m-hero__body">مسارات عملية بالعربية، ومشاريع حقيقية، ومدربون يرافقونك خطوة بخطوة.</p>
+        <div class="m-hero__actions">
+          <a class="n-enroll" href="#enroll"><span class="n-enroll__label">سجّل الآن</span><span aria-hidden="true" class="n-enroll__arrow">←</span></a>
+          <a class="n-tracks-link" href="#tracks">استكشف المسارات</a>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="m-story-title" class="m-story">
+      <h2 class="m-story__title" id="m-story-title">رحلتك في نيورا</h2>
+      <div class="m-story__track">
+        <article class="m-story__card">
+          <img alt="روبوت يفتح كتاباً تتطاير منه الصفحات" decoding="async" height="600" loading="lazy" src="/assets/img/story-02.webp" width="800">
+          <div class="m-story__copy">
+            <p class="m-story__label">الأساسيات</p>
+            <h3>كل صفحة درس، وكل درس تجربة</h3>
+            <p>نبدأ من Python والرياضيات التي تحتاجها فعلاً، ثم نحلل بيانات حقيقية من أول أسبوع.</p>
+          </div>
+        </article>
+        <article class="m-story__card">
+          <img alt="روبوت يكتب بينما تتحول الأوراق إلى روبوتات ورقية" decoding="async" height="600" loading="lazy" src="/assets/img/story-03.webp" width="800">
+          <div class="m-story__copy">
+            <p class="m-story__label">المشاريع</p>
+            <h3>من الفكرة إلى نموذج يعمل</h3>
+            <p>تدرّب شبكات عصبية، وتبني تطبيقات بالنماذج اللغوية الكبيرة، وتنشر مشاريعك ليجربها الناس.</p>
+          </div>
+        </article>
+        <article class="m-story__card">
+          <img alt="روبوتات صغيرة تبني درجاً من الكتب المضيئة" decoding="async" height="600" loading="lazy" src="/assets/img/story-04.webp" width="800">
+          <div class="m-story__copy">
+            <p class="m-story__label">التخرّج</p>
+            <h3>ملف أعمال وشهادة تفتح الأبواب</h3>
+            <p>تتخرّج بمشاريع منشورة وشهادة من الأكاديمية، ومراجعة لسيرتك الذاتية قبل أول مقابلة.</p>
+          </div>
+        </article>
+      </div>
+      <div aria-hidden="true" class="m-story__dots"><span class="is-active"></span><span></span><span></span></div>
+    </section>
+
     <div class="neura-stage">
       <section class="scroll-scrub" data-scroll-scrub style="--ss-accent:#e8e36a;--ss-bg:#0b1a2e;--ss-ink:#f2f4f7;--ss-muted:#a9b6c8">
         <div class="scroll-scrub__stage">
@@ -50,7 +107,7 @@
             <figure class="scroll-scrub__layer" data-scroll-scrub-layer data-clip="/assets/video/scene-01.mp4" data-mobile-clip="/assets/video/scene-01-mobile.mp4">
               <picture class="scroll-scrub__picture">
                 <source media="(hover: none) and (pointer: coarse), (max-width: 860px)" srcset="/assets/video/scene-01-mobile-poster.webp">
-                <img alt="" class="scroll-scrub__poster" decoding="async" fetchpriority="high" src="/assets/video/scene-01-poster.webp">
+                <img alt="" class="scroll-scrub__poster" decoding="async" loading="lazy" src="/assets/video/scene-01-poster.webp">
               </picture>
             </figure>
             <figure class="scroll-scrub__layer" data-scroll-scrub-layer data-clip="/assets/video/scene-02.mp4" data-mobile-clip="/assets/video/scene-02-mobile.mp4">
@@ -313,6 +370,11 @@
       <a class="n-enroll" data-magnetic href="#enroll"><span class="n-enroll__label">سجّل الآن</span><span aria-hidden="true" class="n-enroll__arrow">←</span></a>
     </div>
   </footer>
+
+  <a aria-hidden="true" class="m-cta-bar" href="#enroll" tabindex="-1">
+    <span>احجز مقعدك في الدفعة القادمة</span>
+    <strong>سجّل الآن</strong>
+  </a>
 </div>
 </body>
 </html>
