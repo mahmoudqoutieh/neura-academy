@@ -371,65 +371,226 @@
   }
 
 
-  /* ---------- Phone layout: hero loop, story dots, sticky enroll bar, menu ---------- */
-  function initPhone() {
+  /* ---------- Phone: scrolling plays the film as still frames on a canvas ---------- */
+  // Drawing a ready image is cheap on phones; seeking a <video> is what stutters.
+  function initPhoneFilm() {
+    var section = document.querySelector(".m-scroll");
+    if (!section) return;
     var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var canvas = section.querySelector(".m-scroll__canvas");
+    var ctx = canvas && canvas.getContext && canvas.getContext("2d");
+    if (reduce || !ctx) return; // CSS shows a plain readable stack instead
+
+    var media = section.querySelector(".m-scroll__media");
+    var stage = section.querySelector(".m-scroll__stage");
+    var bar = section.querySelector(".m-scroll__progress span");
+    var chapters = Array.prototype.slice.call(section.querySelectorAll(".m-scroll__chapter"));
+    var count = Number(section.getAttribute("data-count")) || 1;
+    var base = section.getAttribute("data-frames");
     var saveData = navigator.connection && navigator.connection.saveData;
-    var hasIO = "IntersectionObserver" in window;
+    var frames = new Array(count);
+    var loaded = new Array(count);
+    // Decoded copies of the frames near the reader: drawing these is ~7x cheaper
+    // than drawing an <img>, which the browser would re-decode every time.
+    var bitmaps = {}, pendingBitmap = {};
+    var canBitmap = typeof window.createImageBitmap === "function";
+    var WINDOW = 10;
+    var top = 0, span = 1, progress = 0, drawn = -1, running = false, dirty = true, started = false;
+    var chapterState = chapters.map(function () { return { o: -1, y: 0 }; });
 
-    // Hero loop: starts only after the page has loaded, pauses when off screen.
-    var video = document.querySelector(".m-hero__video");
-    if (video && !reduce && !saveData) {
-      var start = function () {
-        video.src = video.getAttribute("data-src");
-        var p = video.play();
-        if (p && p.catch) p.catch(function () {});
-        if (hasIO) {
-          new IntersectionObserver(function (entries) {
-            var e = entries[0];
-            if (e.isIntersecting) { var q = video.play(); if (q && q.catch) q.catch(function () {}); }
-            else video.pause();
-          }).observe(video);
+    section.classList.add("is-ready");
+
+    function url(i) {
+      var n = String(i + 1);
+      while (n.length < 3) n = "0" + n;
+      return base + n + ".webp";
+    }
+
+    // Coarse-to-fine order: every 16th frame first, then fill the gaps.
+    function loadAll() {
+      if (started) return;
+      started = true;
+      var order = [], seen = {}, strides = saveData ? [8, 4] : [16, 8, 4, 2, 1];
+      strides.forEach(function (st) {
+        for (var i = 0; i < count; i += st) if (!seen[i]) { seen[i] = 1; order.push(i); }
+      });
+      if (!seen[count - 1]) order.push(count - 1);
+      var next = 0, active = 0;
+      function pump() {
+        while (active < 6 && next < order.length) {
+          (function (i) {
+            active++;
+            var img = new Image();
+            img.decoding = "async";
+            img.onload = function () {
+              // Decode off the main thread so drawing it later never blocks scrolling.
+              var ready = function () {
+                loaded[i] = true;
+                active--;
+                if (Math.abs(i - frameIndex()) < 20) wake();
+                pump();
+              };
+              if (img.decode) img.decode().then(ready, ready);
+              else ready();
+            };
+            img.onerror = function () { active--; pump(); };
+            img.src = url(i);
+            frames[i] = img;
+          })(order[next++]);
         }
-      };
-      var later = function () {
-        if ("requestIdleCallback" in window) window.requestIdleCallback(start, { timeout: 1500 });
-        else window.setTimeout(start, 300);
-      };
-      if (document.readyState === "complete") later();
-      else window.addEventListener("load", later, { once: true });
+      }
+      pump();
     }
 
-    // Story dots follow the swipe position.
-    var track = document.querySelector(".m-story__track");
-    var dots = document.querySelectorAll(".m-story__dots span");
-    if (track && dots.length) {
-      var pending = false;
-      track.addEventListener("scroll", function () {
-        if (pending) return;
-        pending = true;
-        window.requestAnimationFrame(function () {
-          pending = false;
-          var card = track.firstElementChild;
-          var step = card ? card.getBoundingClientRect().width + 14 : 1;
-          var i = Math.round(Math.abs(track.scrollLeft) / step);
-          Array.prototype.forEach.call(dots, function (d, n) { d.classList.toggle("is-active", n === i); });
+    function frameIndex() { return Math.round(progress * (count - 1)); }
+
+    function nearestLoaded(i) {
+      for (var d = 0; d < count; d++) {
+        if (i - d >= 0 && loaded[i - d]) return i - d;
+        if (i + d < count && loaded[i + d]) return i + d;
+      }
+      return -1;
+    }
+
+    function layout() {
+      var dpr = Math.min(window.devicePixelRatio || 1, 2);
+      var w = Math.round(media.clientWidth * dpr), h = Math.round(media.clientHeight * dpr);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+        drawn = -1;
+      }
+      var rect = section.getBoundingClientRect();
+      // The stage sticks below the header, so the film starts that much earlier.
+      var stickTop = parseFloat(window.getComputedStyle(stage).top) || 0;
+      top = rect.top + (window.scrollY || window.pageYOffset) - stickTop;
+      span = Math.max(section.offsetHeight - stage.offsetHeight, 1);
+      wake();
+    }
+
+    function warmBitmaps(center) {
+      if (!canBitmap) return;
+      for (var d = 0; d <= WINDOW; d++) {
+        [center + d, center - d].forEach(function (i) {
+          if (i < 0 || i >= count || !loaded[i] || bitmaps[i] || pendingBitmap[i]) return;
+          pendingBitmap[i] = true;
+          window.createImageBitmap(frames[i]).then(function (bm) {
+            delete pendingBitmap[i];
+            if (Math.abs(i - frameIndex()) > 2 * WINDOW) { bm.close && bm.close(); return; }
+            bitmaps[i] = bm;
+            if (Math.abs(i - frameIndex()) <= 2) { drawn = -1; wake(); }
+          }, function () { delete pendingBitmap[i]; canBitmap = false; });
         });
-      }, { passive: true });
+      }
+      for (var k in bitmaps) {
+        if (Math.abs(k - center) > 2 * WINDOW) {
+          if (bitmaps[k].close) bitmaps[k].close();
+          delete bitmaps[k];
+        }
+      }
     }
 
-    // Sticky enroll bar: visible after the hero, hidden while the form is on screen.
+    function nearestBitmap(i) {
+      for (var d = 0; d <= 3; d++) {
+        if (bitmaps[i - d]) return i - d;
+        if (bitmaps[i + d]) return i + d;
+      }
+      return -1;
+    }
+
+    function draw() {
+      var want = frameIndex();
+      warmBitmaps(want);
+      var i = nearestBitmap(want), src;
+      if (i >= 0) src = bitmaps[i];
+      else {
+        i = nearestLoaded(want);
+        if (i < 0) return;
+        src = frames[i];
+      }
+      if (i === drawn) return;
+      var img = src;
+      var cw = canvas.width, ch = canvas.height, iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height;
+      var scale = Math.max(cw / iw, ch / ih);
+      var sw = cw / scale, sh = ch / scale;
+      ctx.drawImage(img, (iw - sw) / 2, (ih - sh) / 2, sw, sh, 0, 0, cw, ch);
+      drawn = i;
+    }
+
+    var smooth = function (x) { x = clamp(x); return x * x * (3 - 2 * x); };
+
+    function updateChapters() {
+      var n = chapters.length, seg = 1 / n, edge = 0.2;
+      chapters.forEach(function (el, i) {
+        var local = (progress - i * seg) / seg;
+        var fadeIn = i === 0 ? 1 : smooth(local / edge);
+        var fadeOut = i === n - 1 ? 1 : smooth((1 - local) / edge);
+        var v = Math.min(fadeIn, fadeOut);
+        var y = Math.round((1 - v) * (local < 0.5 ? 26 : -26));
+        var st = chapterState[i];
+        if (Math.abs(st.o - v) > 0.01 || st.y !== y) {
+          el.style.opacity = v.toFixed(3);
+          el.style.transform = "translate3d(0," + y + "px,0)";
+          st.o = v;
+          st.y = y;
+        }
+        el.classList.toggle("is-active", v > 0.5);
+      });
+    }
+
+    function tick() {
+      running = false;
+      if (dirty) {
+        dirty = false;
+        var y = window.scrollY || window.pageYOffset;
+        progress = clamp((y - top) / span);
+        if (bar) bar.style.transform = "scaleX(" + progress.toFixed(4) + ")";
+        updateChapters();
+      }
+      draw();
+    }
+
+    function wake() {
+      dirty = true;
+      if (!running) {
+        running = true;
+        window.requestAnimationFrame(tick);
+      }
+    }
+
+    var lastWidth = window.innerWidth;
+    window.addEventListener("scroll", function () { loadAll(); wake(); }, { passive: true });
+    window.addEventListener("resize", function () {
+      // Ignore the URL bar showing/hiding (height-only changes).
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      layout();
+    });
+    window.addEventListener("orientationchange", function () { window.setTimeout(layout, 200); });
+
+    // First frame comes from the <img>; the rest start after the page has loaded.
+    var first = section.querySelector(".m-scroll__poster");
+    frames[0] = first;
+    var markFirst = function () { loaded[0] = true; wake(); };
+    if (first.complete && first.naturalWidth) markFirst();
+    else first.addEventListener("load", markFirst, { once: true });
+    if (document.readyState === "complete") loadAll();
+    else window.addEventListener("load", loadAll, { once: true });
+
+    layout();
+  }
+
+  /* ---------- Phone: sticky enroll bar + menu ---------- */
+  function initPhoneChrome() {
     var bar = document.querySelector(".m-cta-bar");
-    var hero = document.querySelector(".m-hero");
+    var film = document.querySelector(".m-scroll");
     var form = document.getElementById("enroll");
-    if (bar && hero && form && hasIO) {
-      var heroVisible = true, formVisible = false;
-      var sync = function () { bar.classList.toggle("is-visible", !heroVisible && !formVisible); };
-      new IntersectionObserver(function (e) { heroVisible = e[0].isIntersecting; sync(); }).observe(hero);
+    if (bar && film && form && "IntersectionObserver" in window) {
+      var filmVisible = true, formVisible = false;
+      var sync = function () { bar.classList.toggle("is-visible", !filmVisible && !formVisible); };
+      new IntersectionObserver(function (e) { filmVisible = e[0].isIntersecting; sync(); }).observe(film);
       new IntersectionObserver(function (e) { formVisible = e[0].isIntersecting; sync(); }, { rootMargin: "0px 0px -20% 0px" }).observe(form);
     }
-
-    // Menu closes after choosing a section.
     var menu = document.querySelector(".m-menu");
     if (menu) {
       menu.addEventListener("click", function (e) {
@@ -451,7 +612,8 @@
         if (desktop.removeEventListener) desktop.removeEventListener("change", onChange);
       };
       if (desktop.addEventListener) desktop.addEventListener("change", onChange);
-      initPhone();
+      initPhoneFilm();
+      initPhoneChrome();
     }
     initPointerFx();
     initEnroll();
